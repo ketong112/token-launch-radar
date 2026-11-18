@@ -118,6 +118,78 @@
     return 30;
   }
 
+  /** What one simple transaction costs on a chain, in whole dollars, as an estimate: gas is not in the snapshot. */
+  function gasUsdFor(chain) {
+    switch (chain) {
+      case 'Ethereum':
+        return 8;
+      case 'Solana':
+      case 'Sui':
+      case 'Aptos':
+        return 0.05;
+      case 'Base':
+      case 'Arbitrum':
+      case 'Optimism':
+      case 'zkSync Era':
+      case 'Linea':
+      case 'Scroll':
+      case 'Blast':
+      case 'Mode':
+        return 0.5;
+      case 'BSC':
+        return 0.3;
+      case 'Polygon':
+        return 0.1;
+      case 'Avalanche':
+        return 0.5;
+      default:
+        return 1;
+    }
+  }
+
+  /** A plan's economics, in whole dollars: the capital, the gas of every transaction in the plan, and the total. */
+  function planEconomics(p, age) {
+    var capital = capitalFor(p);
+    var gasEach = gasUsdFor(chainOf(p));
+    var hold = holdDaysFor(age);
+    var weeks = Math.ceil(hold / 7);
+    // One transaction to set up, one a week while holding, one to unwind.
+    var gas = Math.round(gasEach * (2 + weeks) * 100) / 100;
+    var total = Math.round((capital + gas) * 100) / 100;
+    return { capital: capital, gas: gas, total: total, weeks: weeks, gas_share: Math.round((gas / capital) * 1000) / 1000 };
+  }
+
+  /** The verdict's base band from the implied value, before the gas step-down. */
+  function verdictBase(implied) {
+    if (implied >= DATA.verdict_farm_min) return 'FARM';
+    if (implied >= DATA.verdict_thin_min) return 'THIN';
+    return 'SKIP';
+  }
+
+  /** One step down the verdict ladder: FARM to THIN, THIN to SKIP, SKIP stays SKIP. */
+  function stepDown(v) {
+    if (v === 'FARM') return 'THIN';
+    return 'SKIP';
+  }
+
+  /**
+   * A row's verdict and whether the gas stepped it down: the base band from the implied value,
+   * then one step down when the plan's gas alone is more than DATA.verdict_gas_share of its capital.
+   */
+  function verdictFor(implied, economics) {
+    var base = verdictBase(implied);
+    if (economics.gas_share > DATA.verdict_gas_share) return { verdict: stepDown(base), downgraded: true };
+    return { verdict: base, downgraded: false };
+  }
+
+  /** A dollar amount with thousands separators, deterministic and locale-free; cents kept when present. */
+  function fmtUsdPlain(n) {
+    var whole = Math.trunc(n);
+    var cents = Math.round((n - whole) * 100);
+    var intPart = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return cents === 0 ? '$' + intPart : '$' + intPart + '.' + String(cents).padStart(2, '0');
+  }
+
   /** The category's one action, in the words a farmer can follow. */
   function actionFor(p, capital, chain) {
     var c = (p.category || '').toLowerCase();
@@ -163,11 +235,12 @@
   }
 
   /**
-   * A protocol's farm plan: six steps, each an action with a cost and a time.
-   * Derived from the protocol's own record (category, chains, TVL, age), never
-   * from a hand-written list of names. It never claims the protocol has a token,
-   * an airdrop or a points program: the protocol records no token, and step 5
-   * says so by conditioning the claim on a page the protocol itself publishes.
+   * A protocol's farm plan: seven steps, each an action with a cost and a time. Derived from
+   * the protocol's own record (category, chains, TVL, age), never from a hand-written list of
+   * names. The seventh step nets the plan to the dollar — the capital, the gas of every
+   * transaction, the total — and ends in the verdict. It never claims the protocol has a
+   * token, an airdrop or a points program: the protocol records no token, and step 5 says so
+   * by conditioning the claim on a page the protocol itself publishes.
    */
   function farmSteps(p, age) {
     var chain = chainOf(p);
@@ -175,6 +248,16 @@
     var capital = capitalFor(p);
     var hold = holdDaysFor(age);
     var action = actionFor(p, capital, chain);
+    var economics = planEconomics(p, age);
+    var implied = impliedOf(p, MODEL);
+    var v = verdictFor(implied, economics);
+    var gasPct = Math.round(economics.gas_share * 100);
+    var reason =
+      v.verdict === 'FARM'
+        ? 'the implied value of ' + fmtUsdPlain(implied) + ' puts this in the board\'s top group, and the plan costs ' + fmtUsdPlain(economics.total)
+        : v.verdict === 'THIN'
+          ? 'the implied value of ' + fmtUsdPlain(implied) + ' is mid-board; farm it only with capital you can leave alone for ' + hold + ' days'
+          : 'the implied value of ' + fmtUsdPlain(implied) + ' is near the board\'s tail, and the plan costs ' + fmtUsdPlain(economics.total) + ', which the value does not justify';
     return [
       {
         text: 'Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.',
@@ -205,6 +288,11 @@
         text: 'Write the wallet, the dates and every transaction in a farm log so you can repeat the position or unwind it.',
         cost: 'nothing but the log',
         time: '5 minutes'
+      },
+      {
+        text: 'Total plan cost: ' + fmtUsdPlain(economics.total) + ' — ' + fmtUsdPlain(economics.capital) + ' of capital stays in the position and ' + fmtUsdPlain(economics.gas) + ' of gas over ' + hold + ' days (about ' + economics.weeks + ' weekly actions). Net: the gas is ' + gasPct + '% of the capital. Verdict: ' + v.verdict + ' — ' + reason + (v.downgraded ? ' (Stepped down one level: the gas alone is ' + gasPct + '% of the capital.)' : ''),
+        cost: fmtUsdPlain(economics.total) + ' in all',
+        time: hold + ' days'
       }
     ];
   }
@@ -220,17 +308,19 @@
   /* ---------- state + hash deep-linking ---------- */
 
   var state = { q: '', category: 'all', chain: 'all', tab: 'pre', sort: 'rank', dir: 1, limit: 50, selected: null };
-  var SORT_DEFAULT_DIR = { rank: 1, name: 1, tvl: -1, change: -1, age: -1, value: -1, status: 1 };
+  var SORT_DEFAULT_DIR = { rank: 1, name: 1, tvl: -1, change: -1, age: -1, value: -1, verdict: 1, status: 1 };
 
   function readHash() {
     var params = new URLSearchParams(window.location.hash.slice(1));
     var q = params.get('q');
     var category = params.get('category');
     var chain = params.get('chain');
+    var tab = params.get('tab');
     var p = params.get('p');
     if (q !== null) state.q = q;
     if (category !== null) state.category = category;
     if (chain !== null) state.chain = chain;
+    if (tab === 'pre' || tab === 'live') state.tab = tab;
     return p;
   }
 
@@ -239,6 +329,7 @@
     if (state.q) params.set('q', state.q);
     if (state.category !== 'all') params.set('category', state.category);
     if (state.chain !== 'all') params.set('chain', state.chain);
+    if (state.tab !== 'pre') params.set('tab', state.tab);
     if (state.selected) params.set('p', state.selected);
     var hash = params.toString();
     var url = hash ? '#' + hash : window.location.pathname + window.location.search;
@@ -282,6 +373,7 @@
     else if (key === 'change') { av = a.change_7d; bv = b.change_7d; }
     else if (key === 'age') { av = a.age_days; bv = b.age_days; }
     else if (key === 'value') { av = rowValue(a); bv = rowValue(b); }
+    else if (key === 'verdict') { var order = { FARM: 0, THIN: 1, SKIP: 2 }; av = a.live ? 3 : order[a.verdict]; bv = b.live ? 3 : order[b.verdict]; }
     else if (key === 'status') { av = a.live ? 1 : 0; bv = b.live ? 1 : 0; }
     else { av = a.rank; bv = b.rank; }
     if (av === null || av === undefined) return 1; // nulls last, either direction
@@ -331,10 +423,11 @@
   }
 
   function buildStats() {
+    var vc = DATA.verdict_counts;
     var facts = [
       [covered + '/' + DATA.watchlist_size, 'Watchlist covered'],
       [String(DATA.board_size), 'Pre-token rows'],
-      [String(DATA.early_size), 'Early rows'],
+      [String(vc.FARM) + ' FARM', 'Verdicts · ' + vc.THIN + ' THIN · ' + vc.SKIP + ' SKIP'],
       [String(DATA.live_size), 'Live-token set aside']
     ];
     var ul = el('ul', { class: 'stats' });
@@ -439,6 +532,7 @@
     { key: 'change', label: '7d' },
     { key: 'age', label: 'Age' },
     { key: 'value', label: 'Implied value' },
+    { key: 'verdict', label: 'Verdict' },
     { key: 'status', label: 'Token status' }
   ];
 
@@ -494,7 +588,7 @@
     while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
     if (shown.length === 0) {
       var empty = el('tr');
-      empty.appendChild(el('td', { colspan: '7', class: 'empty', text: 'No protocols match these filters.' }));
+      empty.appendChild(el('td', { colspan: '8', class: 'empty', text: 'No protocols match these filters.' }));
       tbody.appendChild(empty);
     }
     shown.forEach(function (row) {
@@ -502,7 +596,12 @@
       var open = function () { openDialog(row); };
       tr.addEventListener('click', open);
       tr.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-      tr.appendChild(el('td', { class: 'rank', text: String(row.rank) }));
+      var rankCell = el('td', { class: 'rank' });
+      rankCell.appendChild(document.createTextNode(String(row.rank)));
+      if (!row.live) {
+        rankCell.appendChild(el('span', { class: 'rank-range', text: 'likely ' + row.rank_lo + '–' + row.rank_hi, title: 'Rank range: P10–P90 over 200 bootstrap refits of the sector multiples' }));
+      }
+      tr.appendChild(rankCell);
       var nameCell = el('td');
       nameCell.appendChild(el('span', { class: 'proto-name', text: row.name }));
       nameCell.appendChild(el('span', { class: 'proto-sub', text: (row.category || 'Other') + ' · ' + row.chains.slice(0, 3).join(', ') + (row.chains.length > 3 ? ' +' + (row.chains.length - 3) : '') }));
@@ -521,6 +620,15 @@
       bar.firstChild.style.width = pct + '%';
       valueCell.appendChild(bar);
       tr.appendChild(valueCell);
+      var verdictCell = el('td');
+      if (row.live) {
+        verdictCell.appendChild(el('span', { class: 'muted', text: '—' }));
+      } else {
+        var vb = el('span', { class: 'badge verdict ' + row.verdict.toLowerCase(), text: row.verdict });
+        vb.title = 'Farm verdict: ' + row.verdict + ' — plan costs ' + fmtUsdPlain(row.plan_cost_usd) + ' (' + fmtUsdPlain(row.capital_usd) + ' capital, ' + fmtUsdPlain(row.gas_usd) + ' gas)';
+        verdictCell.appendChild(vb);
+      }
+      tr.appendChild(verdictCell);
       var badge = el('span', { class: 'badge' + (row.live ? ' live' : ''), text: row.live ? 'Live token' : 'Pre-token' });
       if (!row.live) badge.title = 'Records no token in the snapshot';
       var statusCell = el('td');
@@ -632,6 +740,7 @@
       table.appendChild(breakdownRow('Maturity multiplier', fmtMult(row.maturity_multiplier)));
       table.appendChild(breakdownRow('Breadth multiplier', fmtMult(row.breadth_multiplier) + ' · ' + row.chains.length + ' chain' + (row.chains.length === 1 ? '' : 's')));
       table.appendChild(breakdownRow('Implied value', fmtUsd(row.implied_value_usd)));
+      table.appendChild(breakdownRow('Rank range', '#' + row.rank_lo + '–' + row.rank_hi + ' · implied value ' + fmtUsd(row.implied_p10) + '–' + fmtUsd(row.implied_p90) + ' (P10–P90 over 200 bootstrap refits)'));
       dialogInner.appendChild(table);
 
       var recomputed = impliedOf(row, MODEL);
@@ -643,8 +752,17 @@
       }
       dialogInner.appendChild(recompute);
 
+      dialogInner.appendChild(el('h3', { text: 'Plan cost — verdict: ' + row.verdict }));
+      var costTable = el('table', { class: 'breakdown' });
+      costTable.appendChild(breakdownRow('Capital in the position', fmtUsdPlain(row.capital_usd)));
+      costTable.appendChild(breakdownRow('Gas over the whole plan', fmtUsdPlain(row.gas_usd)));
+      costTable.appendChild(breakdownRow('Total plan cost', fmtUsdPlain(row.plan_cost_usd)));
+      costTable.appendChild(breakdownRow('Gas as a share of capital', Math.round((row.gas_usd / row.capital_usd) * 100) + '%'));
+      dialogInner.appendChild(costTable);
+      dialogInner.appendChild(el('p', { class: 'model-note', text: 'Verdict rule: FARM at an implied value of ' + fmtUsdPlain(DATA.verdict_farm_min) + ' or more, THIN at ' + fmtUsdPlain(DATA.verdict_thin_min) + ' or more, SKIP below that — stepped down one level when the gas alone is more than ' + Math.round(DATA.verdict_gas_share * 100) + '% of the capital.' }));
+
       dialogInner.appendChild(el('h3', { text: 'Farm plan' }));
-      dialogInner.appendChild(el('p', { class: 'model-note', text: 'Six steps, derived from this protocol\u2019s own record — its category, chains, TVL and age. Nothing here claims a token, an airdrop or a points program exists.' }));
+      dialogInner.appendChild(el('p', { class: 'model-note', text: 'Seven steps, derived from this protocol\u2019s own record — its category, chains, TVL and age — and netted to the dollar in the last step. Nothing here claims a token, an airdrop or a points program exists.' }));
       var steps = farmSteps(row, row.age_days).map(stepText);
       var ol = el('ol', { class: 'farm' });
       steps.forEach(function (s) { ol.appendChild(stepListItem(s)); });
@@ -721,6 +839,53 @@
       ' as their sector multiple. Every row on the board ', el('strong', {}, 'records no token'),
       ' in the snapshot. Implied value is this entry\u2019s model, not a promise: it does not mean a token will launch, that there will be an airdrop, or that any price will follow.'
     ]));
+
+    // --- validation: three tests on the snapshot's own live protocols, plus the flat baseline.
+    var val = DATA.validation;
+    panel.appendChild(el('h3', { text: 'How the model was tested' }));
+    panel.appendChild(el('p', { class: 'model-note', text: 'Each test predicts a live protocol\u2019s market cap with the same formula the board uses, the calibration fit without the protocol being predicted. Error is the log error ln(predicted / actual): 0 is exact, 0.69 is a factor of two.' }));
+    var vtable = el('table', { class: 'sectors' });
+    vtable.appendChild(el('caption', { text: 'Validation on the snapshot\u2019s live-token protocols. The numbers are the model\u2019s, not a target it was tuned to hit.' }));
+    var vhead = el('tr');
+    vhead.appendChild(el('th', { scope: 'col', text: 'Test' }));
+    vhead.appendChild(el('th', { scope: 'col', class: 'num', text: 'Tested' }));
+    vhead.appendChild(el('th', { scope: 'col', class: 'num', text: 'Median |log error|' }));
+    vhead.appendChild(el('th', { scope: 'col', class: 'num', text: 'Within 2\u00D7' }));
+    vhead.appendChild(el('th', { scope: 'col', class: 'num', text: 'Spearman \u03C1' }));
+    vtable.appendChild(vhead);
+    [
+      [val.loo, 'Leave-one-out'],
+      [val.walk_forward, 'Walk-forward (fit pre-2025, test 2025+)'],
+      [val.blind, 'Blind holdout (every 4th by slug)'],
+      [val.flat_loo, 'Flat 0.25 multiple (baseline)']
+    ].forEach(function (pair) {
+      var t = pair[0];
+      var tr = el('tr');
+      tr.appendChild(el('td', { text: pair[1], title: t.method }));
+      tr.appendChild(el('td', { class: 'num', text: String(t.n_test) }));
+      tr.appendChild(el('td', { class: 'num', text: t.median_abs_log_error.toFixed(3) }));
+      tr.appendChild(el('td', { class: 'num', text: (t.within_2x * 100).toFixed(1) + '%' }));
+      tr.appendChild(el('td', { class: 'num', text: t.spearman.toFixed(2) }));
+      vtable.appendChild(tr);
+    });
+    panel.appendChild(vtable);
+    var errFactor = Math.exp(val.loo.median_abs_log_error);
+    var decileRatio = val.top_decile_median_mcap / val.bottom_decile_median_mcap;
+    panel.appendChild(el('p', { class: 'model-note' }, [
+      el('strong', {}, 'What the tests show: '), 'the model ranks, it does not price. The typical leave-one-out prediction is off by a factor of ',
+      el('strong', {}, '\u00D7' + errFactor.toFixed(1)),
+      '; only ', String((val.loo.within_2x * 100).toFixed(1)), '% land within 2\u00D7 of the real market cap. A flat 0.25 multiple does about as well on live tokens (median error ',
+      String(val.flat_loo.median_abs_log_error.toFixed(3)), ', Spearman ', String(val.flat_loo.spearman.toFixed(2)), ' vs ', String(val.loo.spearman.toFixed(2)),
+      ') — the fitted curve\u2019s job is not to beat TVL at pricing, it is to stop a bridge\u2019s TVL being scored like a DEX\u2019s. What the ranking does do: the top decile of the leave-one-out predictions holds protocols whose real market caps are ',
+      el('strong', {}, decileRatio.toFixed(0) + '\u00D7'),
+      ' the bottom decile\u2019s (', fmtCompact(val.top_decile_median_mcap), ' vs ', fmtCompact(val.bottom_decile_median_mcap), ' median). The walk-forward test under-predicts the newer cohort (mean log error ',
+      String(val.walk_forward.bias_log.toFixed(2)), '): protocols listed since 2025 trade richer than the old calibration expects. Read the board as a ranking with wide bands — the rank range on every row is the P10–P90 over 200 bootstrap refits of the sector multiples — not as a price.'
+    ]));
+    panel.appendChild(el('p', { class: 'model-note' }, [
+      el('strong', {}, 'Verdicts: '), 'FARM at an implied value of ', fmtUsdPlain(DATA.verdict_farm_min),
+      ' or more, THIN at ', fmtUsdPlain(DATA.verdict_thin_min), ' or more, SKIP below that — stepped down one level when a plan\u2019s gas alone is more than ',
+      String(Math.round(DATA.verdict_gas_share * 100)), '% of its capital. The farm plan on every row is netted to the dollar in its last step: the capital, the gas of every transaction, and the total.'
+    ]));
     return panel;
   }
 
@@ -758,6 +923,12 @@
 
   rebuildFilterOptions();
   renderTable();
+  // A deep-linked tab (from the hash) starts on that tab: the buttons are built pressed for
+  // Pre-token, so sync them when the hash said Live token.
+  if (state.tab === 'live') {
+    tabPre.setAttribute('aria-pressed', 'false');
+    tabLive.setAttribute('aria-pressed', 'true');
+  }
   if (openSlug) {
     var row = findRow(openSlug);
     if (row) {

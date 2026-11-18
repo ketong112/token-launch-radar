@@ -117,7 +117,7 @@ button, input, select { font: inherit; color: inherit; }
   margin-bottom: 20px;
   max-height: 640px;
 }
-table.board { width: 100%; border-collapse: collapse; min-width: 760px; }
+table.board { width: 100%; border-collapse: collapse; min-width: 880px; }
 .board caption { text-align: left; padding: 12px 16px; color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--line); }
 .board th, .board td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .board thead th {
@@ -165,6 +165,10 @@ table.board { width: 100%; border-collapse: collapse; min-width: 760px; }
   white-space: nowrap;
 }
 .badge.live { border-color: var(--amber); color: var(--amber); }
+.badge.verdict.farm { border-color: var(--accent-dim); color: var(--accent); }
+.badge.verdict.thin { border-color: var(--amber); color: var(--amber); }
+.badge.verdict.skip { border-color: #5a3a3a; color: var(--red); }
+.rank-range { display: block; color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
 .bar { display: block; height: 5px; background: #223147; border-radius: 3px; margin-top: 5px; min-width: 90px; }
 .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .bar.live > i { background: var(--amber); }
@@ -179,6 +183,7 @@ table.board { width: 100%; border-collapse: collapse; min-width: 760px; }
   margin-bottom: 20px;
 }
 .model-panel h2 { font-size: 19px; }
+.model-panel h3 { font-size: 16px; margin: 18px 0 8px; }
 .formula {
   background: var(--bg);
   border: 1px solid var(--line);
