@@ -1,10 +1,16 @@
 // Token Radar's entrypoint (Node 22, standard library only).
 //
 // The program reads the sealed snapshot from /input/snapshot.json (or --input <file|dir>),
-// scores every pre-token protocol with the radar-2 model in lib/model.ts, writes the ranked
+// scores every pre-token protocol with the radar-3 model in lib/model.ts, writes the ranked
 // board to /output/board.json, writes the dashboard's data beside the page as data.js, and
 // copies this repository's dashboard/ and screenshots/ to /output. Last, it writes
 // /output/dossier.json, the summary the judge reads, with the vendored make.fun library.
+//
+// radar-3 scores all 198 rankable pre-token protocols (the 40-protocol watchlist plus every
+// other rankable protocol), validates the model three ways on the snapshot's own live-token
+// protocols (leave-one-out, walk-forward, blind holdout, plus a flat-0.25 baseline) and reports
+// the real numbers, gives every row a rank range from 200 bootstrap refits of the sector
+// multiples, and nets every farm plan to the dollar with a FARM / THIN / SKIP verdict.
 //
 // The dashboard is a static page, no framework and no network: dashboard/index.html,
 // dashboard/app.css and dashboard/app.js read /output/data.js, which this program writes from
@@ -87,5 +93,7 @@ writeFileSync(join(out, 'dossier.json'), buildDossier(out, { text_max_bytes: TEX
 
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows scored (${radar.early_size} early, ${radar.live_size} live set aside)\n` +
+    `token radar: validation LOO median |log error| ${radar.validation.loo.median_abs_log_error} (within 2x ${(radar.validation.loo.within_2x * 100).toFixed(1)}%, Spearman ${radar.validation.loo.spearman}), walk-forward ${radar.validation.walk_forward.median_abs_log_error}, blind ${radar.validation.blind.median_abs_log_error}\n` +
+    `token radar: verdicts FARM ${radar.verdict_counts.FARM} / THIN ${radar.verdict_counts.THIN} / SKIP ${radar.verdict_counts.SKIP}\n` +
     `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ${join(out, 'dashboard')} (3 files), ${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')}\n`,
 );

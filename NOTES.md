@@ -133,7 +133,69 @@ implied = round( tvl_usd × sectorMultiple(category) × growthMult × maturityMu
 - Judge is pairwise vs house anchors (starter = 2-plain, strength 0.593) and
   rungs up to 3.253. Our edge vs the starter: snapshot-derived sector multiples,
   implied-value (not TVL) early picks, chain-aware farm plans, a designed page.
-- Submission is NOT part of this build: no keypair, no repo, no push, no
-  submit. The parent session handles GitHub + wallet + transcripts bundle later.
+## 8. Round 2 — radar-3 (2026-11-18, this build session)
+
+Round 1 scored 88.5% judge win rate (profile @lively-heron-54) but sits outside the live
+top 50. Round 2 rebuilds the model and the page on the ATM findings (leaders: fitted
+comps curve tested blind/OOS/walk-forward/LOO, rank ranges from refits, farm plans
+netted to the dollar with farm/thin/skip verdicts, 198 rows, 40/40 watchlist).
+
+- **Coverage 120 → 198 rows.** The snapshot holds exactly 198 rankable pre-token
+  protocols (40 watchlist + 158 early); the board now ranks all of them. No cap.
+- **Validation, computed from the snapshot, reported with real numbers** (`validateModel`
+  in lib/model.ts; shown in the dashboard's "How the model was tested" panel and in
+  README): LOO (n=128) median |log error| 1.688, within 2× 19.5%, Spearman 0.385;
+  walk-forward fit pre-2025-01-01 / test 2025+ (n=31) 1.480, 25.8%, 0.262; blind holdout
+  every 4th by slug (n=32) 1.941, 21.9%, 0.387; flat-0.25 LOO baseline 1.656, 26.6%,
+  0.435. Top-decile median actual mcap $129,118,224 vs bottom $5,104,554 (25×).
+  The numbers were rechecked with independent scripts (/tmp/explore2.mjs, explore3.mjs,
+  check-r3.mjs): LOO and blind match exactly; walk-forward differs from the first
+  exploration only because protocols with no listed date are now excluded from that
+  test (a walk-forward needs a date to walk on).
+- **Honest reading, stated on the dashboard:** the model ranks, it does not price
+  (typical error ×5.4); the flat multiple does about as well on live tokens, so the
+  fitted curve is justified by sector separation, not by a tighter price prediction.
+  Do NOT claim the fitted curve beats the flat multiple — it does not, on these tests.
+- **Rank ranges:** 200 bootstrap refits (mulberry32, fixed seed 0xc0ffee, one stream in
+  fixed order) resample each category's live ratios, refit the multiples, re-rank the
+  board; P10–P90 of rank and implied value per row. Median range width 30 ranks
+  (p90 96, max 121); rank 1 is 1–1, rank 100 is 54–160, rank 198 is 162–198.
+- **Farm plans, 7 steps, netted to the dollar:** capital + gas of every transaction
+  (setup + weekly + unwind) + total, ending in FARM / THIN / SKIP. Bands: FARM ≥ $10M,
+  THIN ≥ $2M, else SKIP; one step down when gas alone is > 50% of capital. Counts:
+  38 FARM / 86 THIN / 74 SKIP (20 FARM→THIN and 23 THIN→SKIP by the gas rule, mostly
+  Ethereum-first rows). Step 7 states the totals and the verdict. `fmtUsd` keeps cents
+  when present (gas $0.55 stays $0.55, not $1) so the step text agrees with the numeric
+  fields exactly.
+- **Dashboard:** new Verdict column (sortable) + "likely lo–hi" rank range under each
+  rank; stats show verdict counts; model panel has the validation table + the honest
+  reading + the verdict rule; detail dialog has a Rank range row and a Plan cost
+  section (capital / gas / total / gas share). Deep-linking extended: `#tab=live`
+  opens the Live token tab. Dashboard source 57,618 bytes total (dossier text 57,882
+  bytes, under the 65,536 cap, no cut). Live tab verified headless: 24 rows, Market cap
+  column, Verdict "—".
+- **Farm-step agreement, verified for all 198 rows:** the page's farmSteps (app.js)
+  and board.json's farm_steps are byte-identical on all 7 steps (extraction check
+  /tmp/agree-check.mjs: 0 mismatches), the page's recompute agrees on all 198 rows,
+  and the page's verdict agrees with data.js on all 198 rows. Board vs data.js: 0
+  disagreements. Two runs of main.ts are byte-identical (deterministic).
+- **Screenshots (1440×900 / 1440×1440, PNG):** 1-board.png 1440×900 144 KB (board,
+  verdicts + rank ranges visible); 2-detail.png 1440×1440 303 KB (Steakhouse Financial
+  #1 detail: breakdown, rank range #1–1, recompute line, plan cost, steps 1–6; step 7's
+  text sits below the fold — its numbers are in the Plan cost table directly above);
+  3-filtered.png 1440×900 137 KB (category Dexs, 21 of 21). All three LOOKED at.
+  Tooling note: /opt/meta-chromium/chrome refuses to start in this VM ("Hatch WebGL
+  domain policy is required for browser startup" — the flag
+  --hatch-webgl-allowed-domains did not satisfy it); screenshots were taken with the
+  Playwright chrome-headless-shell at
+  ~/.cache/ms-playwright/chromium_headless_shell-1255/.../chrome-headless-shell
+  (--no-sandbox, --virtual-time-budget=6000).
+- **Gate (local validator, final build): ALL 7 CHECKS PASS** — dashboard_files (3
+  files, 57,618 bytes), board_file (198 rows), sorted_by_value (top $557,909,595,
+  bottom $620,182), coverage (40/40), farm_steps (198×7, all 20–600 chars),
+  screenshots (1440×900 / 1440×1440, ≤512 KB), dossier_matches (byte-identical,
+  858,654 bytes ≤ 1.5 MiB), no_secrets.
+- Submission is NOT part of this build: no keypair, no repo, no push, no submit. The
+  parent session handles GitHub + wallet + transcripts bundle later.
   Transcript note for submission: this session + subagent sessions built the
   code; bundle must run from the top-level agent after subagents finish.
