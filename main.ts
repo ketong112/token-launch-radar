@@ -1,16 +1,20 @@
 // Token Radar's entrypoint (Node 22, standard library only).
 //
 // The program reads the sealed snapshot from /input/snapshot.json (or --input <file|dir>),
-// scores every pre-token protocol with the radar-3 model in lib/model.ts, writes the ranked
+// scores every pre-token protocol with the radar-4 model in lib/model.ts, writes the ranked
 // board to /output/board.json, writes the dashboard's data beside the page as data.js, and
 // copies this repository's dashboard/ and screenshots/ to /output. Last, it writes
 // /output/dossier.json, the summary the judge reads, with the vendored make.fun library.
 //
-// radar-3 scores all 198 rankable pre-token protocols (the 40-protocol watchlist plus every
-// other rankable protocol), validates the model three ways on the snapshot's own live-token
-// protocols (leave-one-out, walk-forward, blind holdout, plus a flat-0.25 baseline) and reports
-// the real numbers, gives every row a rank range from 200 bootstrap refits of the sector
-// multiples, and nets every farm plan to the dollar with a FARM / THIN / SKIP verdict.
+// radar-4 scores all 198 rankable pre-token protocols (the 40-protocol watchlist plus every
+// other rankable protocol) with a size curve fitted on the snapshot's own traded tokens
+// (Theil–Sen log10 market cap on log10 TVL, sector effects shrunk toward the curve),
+// validates the model with a four-level ladder — flat multiple, curve, + sector, + growth
+// and age — tested leave-one-out and older-to-newer, and ships the highest level whose
+// every added term improves both tests. It accounts for all 758 protocols in a ledger,
+// gives every row a bootstrap rank range and a blind-miss range with hold rates, and nets
+// every farm plan to the dollar on a fixed $1,000 ticket with a FARM / THIN / SKIP verdict
+// from the net, a break-even ticket and dollars per hour.
 //
 // The dashboard is a static page, no framework and no network: dashboard/index.html,
 // dashboard/app.css and dashboard/app.js read /output/data.js, which this program writes from
@@ -22,7 +26,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
+import { SHIPPED_LEVEL, boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -91,9 +95,13 @@ for (const name of shots) {
 // The dossier is written last: the scorer rebuilds it from this /output and compares bytes.
 writeFileSync(join(out, 'dossier.json'), buildDossier(out, { text_max_bytes: TEXT_MAX_BYTES, screenshots: SCREENSHOT_CAPS, dashboard: { max_files: 400, max_bytes: 4_194_304 } }));
 
+const ladder = radar.validation.ladder;
+const shipped = ladder[SHIPPED_LEVEL]!;
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows scored (${radar.early_size} early, ${radar.live_size} live set aside)\n` +
-    `token radar: validation LOO median |log error| ${radar.validation.loo.median_abs_log_error} (within 2x ${(radar.validation.loo.within_2x * 100).toFixed(1)}%, Spearman ${radar.validation.loo.spearman}), walk-forward ${radar.validation.walk_forward.median_abs_log_error}, blind ${radar.validation.blind.median_abs_log_error}\n` +
-    `token radar: verdicts FARM ${radar.verdict_counts.FARM} / THIN ${radar.verdict_counts.THIN} / SKIP ${radar.verdict_counts.SKIP}\n` +
+    `token radar: curve a=${radar.curve_a.toFixed(3)} b=${radar.curve_b.toFixed(3)} on ${radar.comps_n} comparables (of ${radar.comps_all_n} traded)\n` +
+    `token radar: ladder L0 flat x${ladder[0]!.loo_miss.toFixed(3)}/${ladder[0]!.o2n_miss.toFixed(3)} L1 curve x${ladder[1]!.loo_miss.toFixed(3)}/${ladder[1]!.o2n_miss.toFixed(3)} L2 +sector x${shipped.loo_miss.toFixed(3)}/${shipped.o2n_miss.toFixed(3)} L3 +growth/age x${ladder[3]!.loo_miss.toFixed(3)}/${ladder[3]!.o2n_miss.toFixed(3)} (LOO/O2N median miss)\n` +
+    `token radar: blind holdout x${radar.validation.blind.median_miss_x.toFixed(3)} (flat on the same split x${radar.validation.blind_flat.median_miss_x.toFixed(3)}), walk-forward x${radar.validation.walk_forward.median_miss_x.toFixed(3)}\n` +
+    `token radar: verdicts FARM ${radar.verdict_counts.FARM} / THIN ${radar.verdict_counts.THIN} / SKIP ${radar.verdict_counts.SKIP} on a $1,000 ticket\n` +
     `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ${join(out, 'dashboard')} (3 files), ${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')}\n`,
 );

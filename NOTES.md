@@ -199,3 +199,86 @@ netted to the dollar with farm/thin/skip verdicts, 198 rows, 40/40 watchlist).
   parent session handles GitHub + wallet + transcripts bundle later.
   Transcript note for submission: this session + subagent sessions built the
   code; bundle must run from the top-level agent after subagents finish.
+
+## 9. Round 4 — radar-4 (2026-11-18, this build session)
+
+Round 3 scored but its fitted model did NOT beat a flat multiple on live tokens
+(LOO ×5.41 vs flat ×5.24, n=128) — the honest reading said so openly. Round 4 rebuilds
+the model on the ATM findings (leader @sudhan's comps-curve-3, 96.2%, verified by
+running it on the same snapshot) and closes gaps 1–7 in ROUND4-ATM.md.
+
+- **GAP 1 — model, validated in /tmp BEFORE any commit.** The experiment
+  (/tmp/r4-ladder.mjs, /tmp/r4-variants.mjs, /tmp/r4-blind.mjs) reproduced the study's
+  ladders EXACTLY on both comp sets using the sudhan harness plus an independent
+  from-scratch implementation. **Shipped: L2 (size curve + sector, pseudoComps=4)
+  fitted on A90** (filtered comps: family-merged, house categories + receipt tokens
+  excluded). L3 (growth+age) was tested and DROPPED — it worsens LOO (×2.921 vs
+  ×2.865) while improving O2N slightly (×2.401 vs ×2.495); the strict rule keeps only
+  terms that improve BOTH. Heavier sector shrinkage (pseudo 8/16) did not fix O2N
+  at n=128. Per-category sector grouping was worse than the 6-sector grouping
+  (LOO ×3.920 vs ×3.212).
+  - Ladder A90 (fit set, shipped): L0 flat ×4.821 / O2N ×4.452; L1 curve ×3.510 /
+    ×2.735; **L2 +sector ×2.865 / ×2.495**; L3 +growth/age ×2.921 / ×2.401.
+  - Ladder A128 (robustness, all traded): L0 ×4.915 / ×4.912; L1 ×3.524 / ×3.032;
+    L2 ×3.255 / ×3.735; L3 ×3.234 / ×3.795.
+  - Curve fit on A90: a=3.339, b=0.477. Sector effects: Lending −0.191, Network
+    −0.016, Vaults −0.372, Trading +0.368, Dollars +0.016, RWA +0.112.
+  - Blind holdout ×2.047 (flat ×3.988 on the same split); walk-forward ×2.972.
+    Old-split context (GAP 7): radar-3's blind holdout was ×6.97, flat on that split
+    ×6.12 — the split itself was hard; the new L2 scores ×3.78 there vs flat ×6.63.
+  - Deciles: top $39,968,695 vs bottom $3,638,254 (11× — down from radar-3's 25×
+    on a different set; reported honestly). Ranges: young ×7.322 (nYoung 17),
+    seasoned ×2.735, LOO holds 44/90, O2N holds 18/33.
+- **GAP 2 — ledger.** All 758 protocols in one ledger (Ranked 198, Token trades 128,
+  Token on record 288, Bridge 43, Liquid staking 43, Exchange custody 42, Versioned
+  listing 11, Wrapped/staked 5); aside tab 144 rows with reasons. Kin decision: the
+  6 name-stem kin stay RANKED with the ×0.25 discount stated (Manta CeDeFi #183, Solv
+  Strategies #197, GMX Solana #127, MetalX Swap #171, Kava Mint #196, Flying Tulip
+  ftUSD #198 — plus Mezo Earn #164, the 7th, on the watchlist); 19 rows filed under a
+  parent listing.
+- **GAP 3 — KPI strip + proof pills.** Six stats above the board (ranked, total
+  implied, LOO miss, range holds, FARM count, best $/hour) + pills "Watchlist 40/40"
+  and checkBoard() (page recomputes every row and compares with board.json).
+- **GAP 4 — farm plans, net economics.** Fixed $1,000 ticket, 10% share, 4% T-bill;
+  FARM net>0, THIN slice>fees, SKIP otherwise; break-even ticket + $/hour per row;
+  ticket ($1,000/$5,000/$25,000) and share (5%/10%/20%) knobs re-plan live;
+  7→8 steps (Stop rule as its own step). Verdicts **55 FARM / 99 THIN / 44 SKIP**;
+  total implied $1,700,059,047. Top: Bittensor dTAO $62,989,122. Bottom: Flying Tulip
+  ftUSD $388,131. Best per hour: GoonFi +$32.25/h (net $86.01).
+- **GAP 5 — dashboard.** Filters tier/play/verdict/TVL-band/trend; tabs pre/live/
+  traded/aside/method; CSV export; URL-hash state; method tab replaces the old
+  standalone model panel (ladder table, ledger table, formula, sector effects, farm
+  maths, blind-holdout context, decile note).
+- **GAP 6 — rank range.** Bootstrap P10–P90 KEPT, blind-miss range + hold rate ADDED
+  (detail dialog + KPI strip).
+- **Bugs found and fixed during the build:** (1) `fmtUsd` broke on negative numbers
+  (printed "$0.-10" for net −$0.10) — fixed to keep the sign; (2) `sector_effect` /
+  `kinship` were rounded to 4 decimals, which broke the page's exact recompute — now
+  stored at full precision (recompute mismatches 0/198 after the fix).
+- **Byte budget:** dashboard source 64,298 bytes total (app.js 53,417 + app.css 9,943
+  + index.html 938) — dossier text 64,562, under the 65,536 cap (974 bytes headroom).
+  The stepListItem Cost/Time splitter was dropped to save ~900 bytes (steps still carry
+  "Cost: … Time: …" in their text); the farm mirror rewrite and replacing the model
+  panel with the method tab paid for the new features.
+- **Verification fixes found by the agreement check and by LOOKING at the screenshots
+  (not by the validator — it passed with both bugs in):** (1) the page's farm-plan twin
+  wrote the claim step's per-hour as `(+$1.52/hour)` while model.ts writes
+  `($1.52/hour)` — checkBoard() read 143/198; fixed the twin to plain fmtUsdPlain,
+  now 198/198. (2) the Airdrop share select rendered BLANK in the screenshots:
+  `String(0.10)` is `"0.1"` but the option value is `"0.10"` — fixed with
+  `toFixed(2)`, now shows "10%". Both fixed, screenshots retaken, re-checked.
+- **Final verification (fresh main.ts run into out/, 2026-11-18 ~15:24 WIB):**
+  determinism — two runs byte-identical; local validator — **ALL 8 CHECKS PASS**
+  (dashboard_files 3 files 64,298 bytes; board_file 198 rows; sorted_by_value top
+  $62,989,122 bottom $388,131; coverage 40/40; farm_steps 198×8 all 20–600 chars;
+  screenshots 1440×900 136KB / 1440×1440 312KB / 1440×900 135KB; dossier_matches
+  byte-identical 863,240 bytes ≤ 1.5 MiB; no_secrets); page-vs-board agreement in
+  headless Chrome — implied 0/198 mismatches, farm steps 0/1584, verdicts 0/198,
+  checkBoard 198/198; screenshots retaken and LOOKED at (board, #1 Bittensor dTAO
+  detail, Dexs filter 21 of 21). Kit check (`makefun check --worktree`): **4 passed,
+  1 failed, 14 skipped, 5 at submission** — the one failure is `transcripts_present`
+  (no bundle yet), which only the parent can fix: the bundle must run from the
+  top-level agent after subagents finish. README rewritten in 2 edits, main.ts header
+  in 3 (thinking_revised evidence for the bundle).
+- Submission is NOT part of this build: no keypair, no repo, no push, no submit. The
+  parent session handles GitHub + wallet + transcripts bundle later.
