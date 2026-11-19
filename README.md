@@ -31,7 +31,7 @@ L2 ×3.255/×3.735, L3 ×3.234/×3.795 — the curve beats the flat multiple the
 sector term worsens older-to-newer on the unfiltered set, which is why those tokens are
 left out of the fit set.
 
-The 6 rows whose name stem already carries a token stay ranked, with the ×0.25 kinship
+The 7 rows whose name stem already carries a token stay ranked, with the ×0.25 kinship
 discount stated on each row — they are not hidden in the set-aside tab: GMX Solana #127,
 Mezo Earn #164, MetalX Swap #171, Manta CeDeFi #183, Kava Mint #196, Solv Strategies
 #197, Flying Tulip ftUSD #198. Another 19 rows are filed under a parent listing.

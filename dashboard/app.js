@@ -331,12 +331,11 @@
       el('span', { class: 'hl', text: 'implied value' })
     ]));
     lede.appendChild(el('p', {}, [
-      'The watchlist is the floor, not the ceiling: all ', el('strong', {}, String(DATA.watchlist_size)),
-      ' watchlist protocols are on the board, and the early radar adds ', el('strong', {}, String(DATA.early_size)),
-      ' more rows below the ', el('strong', {}, fmtCompact(DATA.floor_usd)),
-      ' floor, picked by implied value rather than by TVL. Every protocol on the board ',
-      el('strong', {}, 'records no token'),
-      ' in the snapshot. Implied value is a model — the fitted size curve applied to locked value, with a sector effect and a kinship discount — not a promise that a token will launch.'
+      'All ', el('strong', {}, String(DATA.watchlist_size)),
+      ' watchlist protocols are on the board, plus ', el('strong', {}, String(DATA.early_size)),
+      ' more below the ', el('strong', {}, fmtCompact(DATA.floor_usd)),
+      ' floor, picked by implied value. Every row ', el('strong', {}, 'records no token'),
+      ' — implied value is a model, not a promise.'
     ]));
     head.appendChild(lede);
     return head;
